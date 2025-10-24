@@ -16,13 +16,13 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = '8274210121:AAGyTRNIInUGqYqP6dtvayTxxjXZm2Btn-Y'
+BOT_TOKEN = 'TOKEN'
 DOWNLOAD_URL = 'http://docs.vztec.ru/index.php/s/W5yaNali0j7SSDD/download'
 ZIP_FILENAME = 'schedule.zip'
 EXTRACT_FOLDER = 'Расписание'
 TARGET_FOLDERS = ['корпус №1 (ФМПК)', 'корпус №2 (ПТФ)']
 UPDATE_INTERVAL = 60
-MAIN_ADMIN_ID = 1347692271
+MAIN_ADMIN_ID = 1000000000
 
 db_manager = DatabaseManager()
 image_processor = ImageProcessor()
