@@ -8,7 +8,6 @@ from docx import Document
 import xml.etree.ElementTree as ET
 import logging
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -69,7 +68,6 @@ class ImageProcessor:
         for row in table_data:
             for i, cell in enumerate(row):
                 if i < len(col_widths):
-                    # Находим самое длинное слово в ячейке
                     words = cell.split()
                     max_word_width = 0
                     for word in words:
@@ -84,7 +82,6 @@ class ImageProcessor:
         try:
             doc = Document(docx_path)
             
-            # Фильтруем служебный текст
             skip_patterns = [
                 r'УТВЕРЖДАЮ',
                 r'Заместитель директора',
@@ -122,7 +119,6 @@ class ImageProcessor:
                     return processed_text
                 return text
             
-            # Собираем контент
             useful_content = []
             tables_data = []
             
@@ -132,7 +128,6 @@ class ImageProcessor:
                     processed_text = process_time_in_text(text)
                     useful_content.append(processed_text)
             
-            # Обрабатываем таблицы
             max_table_width = 0
             for table in doc.tables:
                 table_data = []
@@ -153,18 +148,15 @@ class ImageProcessor:
             if not useful_content and not tables_data:
                 return None
             
-            # Настройки отображения
             margin = 35
             line_height = 30
             table_spacing = 25
             
-            # Определяем ширину изображения на основе таблицы
             if max_table_width > 0:
                 image_width = min(max_table_width + margin * 2, 1200)
             else:
                 image_width = 600
             
-            # Рассчитываем высоту
             total_height = margin * 8
             total_height += len(useful_content) * line_height
             
@@ -187,13 +179,11 @@ class ImageProcessor:
                     table_height += max_lines * 12 + 6
                 total_height += table_height + table_spacing
             
-            # Создаем изображение
             img = Image.new('RGB', (image_width, total_height), color='white')
             draw = ImageDraw.Draw(img)
             
             y = margin
             
-            # Рисуем текст
             for text in useful_content:
                 lines = []
                 words = text.split()
@@ -217,14 +207,12 @@ class ImageProcessor:
                     draw.text((margin, y), line, fill='black', font=self.FONT_REGULAR)
                     y += line_height
             
-            # Рисуем таблицы
             for table_data in tables_data:
                 if y > total_height - 50:
                     break
                     
                 y += table_spacing
                 
-                # Рассчитываем ширину колонок
                 col_widths = [0] * len(table_data[0])
                 for row in table_data:
                     for i, cell in enumerate(row):
@@ -232,7 +220,6 @@ class ImageProcessor:
                             text_width, _ = self.get_text_dimensions(cell, self.FONT_SMALL)
                             col_widths[i] = max(col_widths[i], min(text_width + 10, 250))
                 
-                # Корректируем ширину колонок
                 total_table_width = sum(col_widths)
                 if total_table_width > image_width - margin * 2:
                     min_col_width = 60
@@ -247,10 +234,8 @@ class ImageProcessor:
                     
                     total_table_width = sum(col_widths)
                 
-                # Центрируем таблицу
                 table_x = margin + (image_width - margin * 2 - total_table_width) // 2
                 
-                # Рассчитываем высоту таблицы
                 row_heights = []
                 for row in table_data:
                     max_cell_lines = 1
@@ -280,25 +265,20 @@ class ImageProcessor:
                 
                 table_height = sum(row_heights)
                 
-                # Рисуем границы таблицы
                 draw.rectangle([table_x, y, table_x + total_table_width, y + table_height], 
                              outline='black', fill='white', width=1)
                 
-                # Рисуем ячейки и текст
                 current_x = table_x
                 for col_idx, col_width in enumerate(col_widths):
-                    # Вертикальные линии
                     if col_idx > 0:
                         draw.line([current_x, y, current_x, y + table_height], fill='black', width=1)
                     
                     current_y = y
                     for row_idx, row in enumerate(table_data):
-                        # Горизонтальные линии
                         if row_idx > 0:
                             draw.line([current_x, current_y, current_x + col_width, current_y], 
                                      fill='black', width=1)
                         
-                        # Текст ячейки
                         if col_idx < len(row):
                             cell_text = row[col_idx]
                             if cell_text:
@@ -332,7 +312,6 @@ class ImageProcessor:
                 
                 y += table_height
             
-            # Обрезаем изображение
             img = img.crop((0, 0, image_width, min(y + margin, total_height)))
             
             return img
@@ -413,7 +392,6 @@ class ImageProcessor:
         if not table_data or not table_data[0]:
             return y
         
-        # Определяем оптимальную ширину для каждой колонки
         col_widths = [0] * len(table_data[0])
         for row in table_data:
             for i, cell in enumerate(row):
@@ -425,7 +403,6 @@ class ImageProcessor:
                         max_word_width = max(max_word_width, text_width)
                     col_widths[i] = max(col_widths[i], min(max_word_width + 10, 150))
         
-        # Корректируем ширину колонок
         total_width = sum(col_widths)
         if total_width > max_width:
             scale_factor = max_width / total_width
@@ -434,7 +411,6 @@ class ImageProcessor:
         
         row_height = 22
         
-        # Рисуем таблицу
         for row_idx, row in enumerate(table_data):
             current_y = y + row_idx * row_height
             
@@ -445,12 +421,10 @@ class ImageProcessor:
                 current_x = x + sum(col_widths[:col_idx])
                 cell_width = col_widths[col_idx]
                 
-                # Рисуем границу ячейки
                 draw.rectangle([current_x, current_y, current_x + cell_width, current_y + row_height], 
                               outline='black', fill='white', width=1)
                 
                 if cell.strip():
-                    # Разбиваем текст на строки
                     lines = []
                     words = cell.split()
                     current_line = ""
@@ -469,7 +443,6 @@ class ImageProcessor:
                     if current_line:
                         lines.append(current_line.strip())
                     
-                    # Рисуем текст (максимум 2 строки)
                     for line_idx, line_text in enumerate(lines[:2]):
                         text_x = current_x + 2
                         text_y = current_y + 3 + line_idx * 9
