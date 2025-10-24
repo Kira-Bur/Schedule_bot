@@ -16,7 +16,6 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Настройки бота
 BOT_TOKEN = '8274210121:AAGyTRNIInUGqYqP6dtvayTxxjXZm2Btn-Y'
 DOWNLOAD_URL = 'http://docs.vztec.ru/index.php/s/W5yaNali0j7SSDD/download'
 ZIP_FILENAME = 'schedule.zip'
@@ -25,13 +24,11 @@ TARGET_FOLDERS = ['корпус №1 (ФМПК)', 'корпус №2 (ПТФ)']
 UPDATE_INTERVAL = 60
 MAIN_ADMIN_ID = 1347692271
 
-# Инициализация компонентов
 db_manager = DatabaseManager()
 image_processor = ImageProcessor()
 admin_manager = AdminManager()
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# Состояния для FSM
 admin_states = {}
 
 def find_schedule_folder(base_path, building=1):
@@ -39,20 +36,17 @@ def find_schedule_folder(base_path, building=1):
     if not os.path.exists(base_path):
         return None
     
-    # Определяем целевую папку по корпусу
     target_folder = None
     if building == 1:
         target_folder = 'корпус №1 (ФМПК)'
     elif building == 2:
         target_folder = 'корпус №2 (ПТФ)'
     
-    # Сначала ищем конкретную папку
     if target_folder:
         potential_path = os.path.join(base_path, target_folder)
         if os.path.exists(potential_path) and os.path.isdir(potential_path):
             return potential_path
     
-    # Если не нашли конкретную, ищем по ключевым словам
     for root, dirs, files in os.walk(base_path):
         for dir_name in dirs:
             lower_dir = dir_name.lower()
@@ -126,14 +120,11 @@ def create_files_keyboard(building=1):
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     
     if files:
-        # Добавляем кнопки с названиями файлов
         buttons = [KeyboardButton(file) for file in files]
         keyboard.add(*buttons)
     
-    # Добавляем кнопку "Обновить список"
     keyboard.add(KeyboardButton("🔄 Обновить список"))
     
-    # Добавляем кнопку "Сменить корпус"
     keyboard.add(KeyboardButton("🏢 Сменить корпус"))
     
     return keyboard
@@ -155,10 +146,8 @@ def send_file_to_user(chat_id, file_path, filename):
         img = image_processor.convert_to_image(file_path)
         
         if img:
-            # Оптимизируем размер без изменения разрешения
             img_buffer = io.BytesIO()
             
-            # Конвертируем в RGB если нужно (для JPEG)
             if img.mode in ('RGBA', 'LA'):
                 background = Image.new('RGB', img.size, (255, 255, 255))
                 background.paste(img, mask=img.split()[-1])
@@ -166,7 +155,6 @@ def send_file_to_user(chat_id, file_path, filename):
             elif img.mode != 'RGB':
                 img = img.convert('RGB')
             
-            # Сохраняем с оптимизацией (качество 85%, прогрессивная загрузка)
             img.save(img_buffer, format='JPEG', optimize=True, quality=85, progressive=True)
             img_buffer.seek(0)
             
@@ -198,11 +186,10 @@ def check_new_files(chat_id=None, building=None):
     """Проверка новых файлов и отправка только новых пользователям"""
     logger.info(f"Проверка новых файлов для корпуса {building if building else 'всех'}...")
     
-    # Если указан конкретный корпус, проверяем только его
     if building is not None:
         buildings_to_check = [building]
     else:
-        buildings_to_check = [1, 2]  # Проверяем оба корпуса
+        buildings_to_check = [1, 2]
     
     all_new_files = []
     
@@ -216,7 +203,6 @@ def check_new_files(chat_id=None, building=None):
         
         current_files = get_schedule_files(current_building)
         
-        # Если нет файлов, не очищаем базу - возможно временная проблема
         if not current_files:
             logger.warning(f"Не найдено файлов расписания для корпуса {current_building}.")
             if chat_id and (building == current_building or building is None):
@@ -225,19 +211,15 @@ def check_new_files(chat_id=None, building=None):
         
         known_files = db_manager.get_known_files(current_building)
         
-        # Определяем, кому отправлять файлы
         if chat_id:
-            # Отправляем только конкретному пользователю
             user_building = db_manager.get_user_building(chat_id)
-            # Проверяем, что пользователь подписан на этот корпус
             if user_building == current_building:
-                users = {chat_id: False}  # Предполагаем, что это не группа
+                users = {chat_id: False}
                 send_to_all = False
             else:
                 users = {}
                 send_to_all = False
         else:
-            # Отправляем всем пользователям этого корпуса (автоматическая проверка)
             users = db_manager.get_users_by_building(current_building)
             send_to_all = True
         
@@ -254,22 +236,18 @@ def check_new_files(chat_id=None, building=None):
                 current_hash = db_manager.get_file_hash(file_path)
                 
                 if filename not in known_files:
-                    # Новый файл
                     new_files.append((filename, file_path, current_hash))
                     logger.info(f"Обнаружен новый файл для корпуса {current_building}: {filename}")
                 elif known_files[filename] != current_hash:
-                    # Файл изменился
                     updated_files.append((filename, file_path, current_hash))
                     logger.info(f"Файл изменен для корпуса {current_building}: {filename}")
         
-        # Отправка новых и измененных файлов
         files_to_send = new_files + updated_files
         all_new_files.extend([(f[0], f[1], f[2], current_building) for f in files_to_send])
         
         if files_to_send:
             logger.info(f"Найдено {len(files_to_send)} файлов для отправки для корпуса {current_building}")
             
-            # Формируем сообщение о новых файлах
             building_name = "Корпус №1 (ФМПК)" if current_building == 1 else "Корпус №2 (ПТФ)"
             
             if new_files:
@@ -284,27 +262,22 @@ def check_new_files(chat_id=None, building=None):
                 updated_files_text = "\n".join([f"• {name}" for name in updated_files_names])
                 message_text += f"\n\n🔄 Обновленные файлы:\n{updated_files_text}"
             
-            # Отправляем уведомление и файлы
             for user_id, is_group in users.items():
                 try:
-                    # Отправляем сообщение о новых/обновленных файлах
                     if send_to_all or user_id == chat_id:
                         bot.send_message(user_id, message_text)
                     
-                    # Отправляем сами файлы
                     for filename, file_path, file_hash in files_to_send:
                         send_file_to_user(user_id, file_path, filename)
-                        time.sleep(0.1)  # Небольшая задержка между отправками
+                        time.sleep(0.1)
                     
                 except Exception as e:
                     logger.error(f"Ошибка отправки пользователю {user_id}: {e}")
             
-            # Сохраняем информацию о файлах после успешной отправки
             for filename, file_path, file_hash in files_to_send:
                 if file_hash:
                     db_manager.save_file_info(filename, file_hash, current_building)
             
-            # Очистка устаревших записей
             db_manager.cleanup_old_files(current_files, current_building)
             
         else:
@@ -319,7 +292,6 @@ def periodic_update():
     while True:
         try:
             if update_schedule():
-                # Проверяем новые файлы для ВСЕХ пользователей, но каждый получит только файлы своего корпуса
                 check_new_files()
             time.sleep(UPDATE_INTERVAL)
         except Exception as e:
@@ -330,15 +302,12 @@ def periodic_update():
 def send_welcome(message):
     """Обработчик команды start"""
     try:
-        # Определяем тип чата
         is_group = message.chat.type in ['group', 'supergroup']
         
-        # Проверяем, есть ли пользователь уже в базе
         current_building = db_manager.get_user_building(message.chat.id)
         
         if current_building is None:
-            # Если пользователь новый, просим выбрать корпус
-            db_manager.add_user(message.chat.id, is_group, 1)  # Временно добавляем с корпусом 1
+            db_manager.add_user(message.chat.id, is_group, 1)
             keyboard = create_building_keyboard()
             welcome_text = (
                 "👋 Добро пожаловать в бот расписания!\n\n"
@@ -346,14 +315,12 @@ def send_welcome(message):
             )
             bot.send_message(message.chat.id, welcome_text, reply_markup=keyboard)
         else:
-            # Если пользователь уже есть, показываем обычное меню
             db_manager.add_user(message.chat.id, is_group, current_building)
             
             schedule_folder = find_schedule_folder(EXTRACT_FOLDER, current_building)
             if schedule_folder:
                 files = get_schedule_files(current_building)
                 if files:
-                    # Если это группа, не показываем клавиатуру
                     if is_group:
                         building_name = "Корпус №1 (ФМПК)" if current_building == 1 else "Корпус №2 (ПТФ)"
                         welcome_text = (
@@ -363,7 +330,6 @@ def send_welcome(message):
                         )
                         bot.send_message(message.chat.id, welcome_text)
                     else:
-                        # Для личных чатов показываем клавиатуру
                         keyboard = create_files_keyboard(current_building)
                         building_name = "Корпус №1 (ФМПК)" if current_building == 1 else "Корпус №2 (ПТФ)"
                         welcome_text = (
@@ -388,12 +354,10 @@ def send_welcome(message):
 def show_schedule_for_groups(message):
     """Команда для показа расписания обоих корпусов в группах"""
     try:
-        # Проверяем, что это группа
         if message.chat.type not in ['group', 'supergroup']:
             bot.send_message(message.chat.id, "❌ Эта команда работает только в группах!")
             return
         
-        # Создаем инлайн-клавиатуру с обоими корпусами
         keyboard = InlineKeyboardMarkup(row_width=2)
         keyboard.add(
             InlineKeyboardButton("🏢 Корпус №1 (ФМПК)", callback_data='schedule_building_1'),
@@ -401,11 +365,9 @@ def show_schedule_for_groups(message):
             InlineKeyboardButton("📋 Оба корпуса", callback_data='schedule_both')
         )
         
-        # Получаем текущий корпус группы
         current_building = db_manager.get_user_building(message.chat.id)
         current_building_name = "Корпус №1 (ФМПК)" if current_building == 1 else "Корпус №2 (ПТФ)"
         
-        # Получаем количество файлов для каждого корпуса
         files_1 = get_schedule_files(1)
         files_2 = get_schedule_files(2)
         
@@ -457,7 +419,6 @@ def send_schedule_files(chat_id, building, message_id=None):
             bot.send_message(chat_id, f"❌ Файлы расписания для {building_name} не найдены")
             return
         
-        # Обновляем сообщение с инлайн-клавиатурой
         if message_id:
             bot.edit_message_text(
                 chat_id=chat_id,
@@ -466,7 +427,6 @@ def send_schedule_files(chat_id, building, message_id=None):
                 reply_markup=None
             )
         
-        # Отправляем файлы
         bot.send_message(chat_id, f"📅 РАСПИСАНИЕ {building_name.upper()}:")
         
         for filename in files:
@@ -474,12 +434,11 @@ def send_schedule_files(chat_id, building, message_id=None):
             if os.path.exists(file_path):
                 try:
                     send_file_to_user(chat_id, file_path, filename)
-                    time.sleep(0.5)  # Задержка между отправками
+                    time.sleep(0.5)
                 except Exception as e:
                     logger.error(f"Ошибка отправки файла {filename}: {e}")
                     bot.send_message(chat_id, f"❌ Не удалось отправить файл: {filename}")
         
-        # Создаем кнопку для возврата к выбору
         keyboard = InlineKeyboardMarkup()
         keyboard.add(InlineKeyboardButton("↩️ Вернуться к выбору", callback_data='back_to_schedule_menu'))
         
@@ -505,14 +464,11 @@ def send_both_buildings_schedule(chat_id, message_id=None):
                 reply_markup=None
             )
         
-        # Отправляем расписание для корпуса 1
         send_schedule_files(chat_id, 1, None)
         time.sleep(1)
         
-        # Отправляем расписание для корпуса 2
         send_schedule_files(chat_id, 2, None)
         
-        # Создаем кнопку для возврата к выбору
         keyboard = InlineKeyboardMarkup()
         keyboard.add(InlineKeyboardButton("↩️ Вернуться к выбору", callback_data='back_to_schedule_menu'))
         
@@ -530,10 +486,8 @@ def send_both_buildings_schedule(chat_id, message_id=None):
 def back_to_schedule_menu(call):
     """Возврат к меню выбора расписания"""
     try:
-        # Просто повторно вызываем команду /raspisanie
         show_schedule_for_groups(call.message)
         
-        # Удаляем предыдущее сообщение
         try:
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except:
@@ -550,7 +504,6 @@ def handle_building_selection(call):
         building = int(call.data.split('_')[1])
         db_manager.set_user_building(call.message.chat.id, building)
         
-        # Обновляем сообщение
         building_name = "Корпус №1 (ФМПК)" if building == 1 else "Корпус №2 (ПТФ)"
         bot.edit_message_text(
             chat_id=call.message.chat.id,
@@ -558,7 +511,6 @@ def handle_building_selection(call):
             text=f"✅ Выбран {building_name}"
         )
         
-        # Показываем меню с файлами
         schedule_folder = find_schedule_folder(EXTRACT_FOLDER, building)
         if schedule_folder:
             files = get_schedule_files(building)
@@ -586,14 +538,12 @@ def handle_building_selection(call):
 def send_selected_file(message):
     """Обработчик выбора файла из клавиатуры"""
     try:
-        # Проверяем, что это личный чат (в группах клавиатура не отображается)
         if message.chat.type in ['group', 'supergroup']:
             return
             
         filename = message.text
         building = db_manager.get_user_building(message.chat.id)
         
-        # Проверяем файл в обоих корпусах
         schedule_folder_1 = find_schedule_folder(EXTRACT_FOLDER, 1)
         schedule_folder_2 = find_schedule_folder(EXTRACT_FOLDER, 2)
         
@@ -616,7 +566,6 @@ def send_selected_file(message):
             bot.send_message(message.chat.id, f"📄 Отправляю файл: {filename}")
             send_file_to_user(message.chat.id, file_path, filename)
             
-            # Сохраняем информацию о файле после отправки
             file_hash = db_manager.get_file_hash(file_path)
             if file_hash and file_building:
                 db_manager.save_file_info(filename, file_hash, file_building)
@@ -630,27 +579,22 @@ def send_selected_file(message):
 def refresh_files_list(message):
     """Обработчик обновления списка файлов - с проверкой новых файлов"""
     try:
-        # Проверяем, что это личный чат (в группах эта команда не работает)
         if message.chat.type in ['group', 'supergroup']:
             return
 
         building = db_manager.get_user_building(message.chat.id)
         building_name = "Корпус №1 (ФМПК)" if building == 1 else "Корпус №2 (ПТФ)"
 
-        # Сначала обновляем расписание
         bot.send_message(message.chat.id, f"🔄 Обновляю расписание для {building_name}...")
 
         if update_schedule():
-            # Проверяем новые файлы ТОЛЬКО для корпуса пользователя
             new_files = check_new_files(message.chat.id, building)
 
-            # Обновляем клавиатуру в любом случае
             keyboard = create_files_keyboard(building)
             files = get_schedule_files(building)
 
             if files:
                 if new_files:
-                    # Если были новые файлы, сообщение уже отправлено в check_new_files
                     bot.send_message(message.chat.id,
                                    f"✅ Список обновлен для {building_name}!\n📁 Доступно файлов: {len(files)}",
                                    reply_markup=keyboard)
@@ -673,7 +617,6 @@ def refresh_files_list(message):
 def change_building(message):
     """Обработчик смены корпуса"""
     try:
-        # Проверяем, что это личный чат
         if message.chat.type in ['group', 'supergroup']:
             return
             
@@ -699,14 +642,12 @@ def send_status(message):
         users = db_manager.get_all_users()
         users_count = len(users)
         
-        # Статистика по корпусам
         building_1_users = sum(1 for user_data in users.values() if user_data['building'] == 1)
         building_2_users = sum(1 for user_data in users.values() if user_data['building'] == 2)
         
         group_users_count = sum(1 for user_data in users.values() if user_data['is_group'])
         personal_users_count = users_count - group_users_count
         
-        # Файлы по корпусам
         files_1 = get_schedule_files(1)
         files_2 = get_schedule_files(2)
         
@@ -739,19 +680,16 @@ def send_status(message):
 def set_building_command(message):
     """Команда для смены корпуса с инлайн-клавиатурой"""
     try:
-        # Проверяем, что это группа
         if message.chat.type not in ['group', 'supergroup']:
             bot.send_message(message.chat.id, "❌ Эта команда работает только в группах!")
             return
         
-        # Создаем инлайн-клавиатуру
         keyboard = InlineKeyboardMarkup()
         keyboard.add(
             InlineKeyboardButton("🏢 Корпус №1 (ФМПК)", callback_data='group_building_1'),
             InlineKeyboardButton("🏫 Корпус №2 (ПТФ)", callback_data='group_building_2')
         )
         
-        # Получаем текущий корпус группы
         current_building = db_manager.get_user_building(message.chat.id)
         current_building_name = "Корпус №1 (ФМПК)" if current_building == 1 else "Корпус №2 (ПТФ)"
         
@@ -773,9 +711,7 @@ def handle_group_building_selection(call):
         building = int(call.data.split('_')[2])
         building_name = "Корпус №1 (ФМПК)" if building == 1 else "Корпус №2 (ПТФ)"
         
-        # Обновляем корпус для группы
         if db_manager.set_user_building(call.message.chat.id, building):
-            # Обновляем сообщение
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
@@ -798,19 +734,15 @@ def request_admin(message):
         first_name = message.from_user.first_name
         last_name = message.from_user.last_name
         
-        # Проверяем, не является ли уже админом
         if admin_manager.is_admin(user_id):
             bot.send_message(message.chat.id, "✅ Вы уже являетесь администратором!")
             return
         
-        # Проверяем, не отправлял ли уже запрос
         if admin_manager.is_pending_admin(user_id):
             bot.send_message(message.chat.id, "⏳ Ваш запрос уже отправлен и ожидает рассмотрения!")
             return
         
-        # Добавляем запрос
         if admin_manager.add_admin_request(user_id, username, first_name, last_name):
-            # Отправляем уведомление главному админу
             user_info = f"ID: {user_id}\nUsername: @{username}\nИмя: {first_name} {last_name}"
             
             keyboard = InlineKeyboardMarkup()
@@ -846,7 +778,6 @@ def admin_panel(message):
             bot.send_message(message.chat.id, "❌ У вас нет прав администратора!")
             return
         
-        # Входим в режим админа
         admin_states[user_id] = 'admin_mode'
         keyboard = create_admin_keyboard()
         
@@ -936,8 +867,7 @@ def handle_broadcast_message(message):
         if message.text == "❌ Отмена":
             exit_admin_panel(message)
             return
-        
-        # Добавляем действие для подтверждения
+
         action_id = admin_manager.add_admin_action(
             message.from_user.id,
             'broadcast',
@@ -945,7 +875,6 @@ def handle_broadcast_message(message):
         )
         
         if action_id:
-            # Отправляем запрос на подтверждение главному админу
             admin_info = f"Админ: @{message.from_user.username or message.from_user.first_name}"
             
             keyboard = InlineKeyboardMarkup()
@@ -967,7 +896,6 @@ def handle_broadcast_message(message):
                 "✅ Запрос на рассылку отправлен на подтверждение главному администратору!"
             )
             
-            # Возвращаемся в обычный режим админа
             admin_states[message.from_user.id] = 'admin_mode'
             
         else:
@@ -1003,7 +931,6 @@ def exit_admin_panel(message):
         if user_id in admin_states:
             del admin_states[user_id]
         
-        # Возвращаем обычную клавиатуру
         building = db_manager.get_user_building(user_id)
         if building:
             keyboard = create_files_keyboard(building)
@@ -1032,7 +959,6 @@ def handle_admin_approval(call):
         if action == 'approve':
             first_name = admin_manager.approve_admin(user_id, call.from_user.id)
             if first_name:
-                # Уведомляем одобренного админа
                 try:
                     bot.send_message(
                         user_id,
@@ -1051,9 +977,8 @@ def handle_admin_approval(call):
             else:
                 bot.answer_callback_query(call.id, "❌ Ошибка одобрения!")
                 
-        else:  # reject
+        else:
             if admin_manager.reject_admin(user_id):
-                # Уведомляем отклоненного пользователя
                 try:
                     bot.send_message(
                         user_id,
@@ -1087,7 +1012,6 @@ def handle_broadcast_approval(call):
             if result:
                 action_type, action_data, admin_id = result
                 
-                # Выполняем рассылку
                 users = db_manager.get_all_users()
                 success_count = 0
                 fail_count = 0
@@ -1100,7 +1024,6 @@ def handle_broadcast_approval(call):
                     except:
                         fail_count += 1
                 
-                # Уведомляем админа о результате
                 bot.send_message(
                     admin_id,
                     f"✅ Рассылка выполнена!\n"
@@ -1117,9 +1040,8 @@ def handle_broadcast_approval(call):
             else:
                 bot.answer_callback_query(call.id, "❌ Ошибка одобрения рассылки!")
                 
-        else:  # reject
+        else:
             if admin_manager.reject_action(action_id):
-                # Уведомляем админа об отклонении
                 admin_id = call.data.split('_')[2]
                 try:
                     bot.send_message(
@@ -1146,9 +1068,7 @@ def main():
     """Основная функция"""
     logger.info("Запуск бота расписания...")
     
-    # Первоначальное обновление расписания
     if update_schedule():
-        # При первом запуске сохраняем все файлы как известные для обоих корпусов
         for building in [1, 2]:
             schedule_folder = find_schedule_folder(EXTRACT_FOLDER, building)
             if schedule_folder:
@@ -1160,7 +1080,6 @@ def main():
                         db_manager.save_file_info(filename, file_hash, building)
                 logger.info(f"Сохранено {len(files)} файлов для корпуса {building} при первом запуске")
     
-    # Запуск фонового обновления
     update_thread = threading.Thread(target=periodic_update, daemon=True)
     update_thread.start()
     
