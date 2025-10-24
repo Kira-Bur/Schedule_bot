@@ -14,7 +14,6 @@ class AdminManager:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Таблица админов
                 cursor.execute('''
                 CREATE TABLE IF NOT EXISTS admins (
                     user_id INTEGER PRIMARY KEY,
@@ -27,7 +26,6 @@ class AdminManager:
                 )
                 ''')
                 
-                # Таблица действий админов (для логов и подтверждения)
                 cursor.execute('''
                 CREATE TABLE IF NOT EXISTS admin_actions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,7 +40,6 @@ class AdminManager:
                 )
                 ''')
                 
-                # Добавляем главного админа (вас)
                 cursor.execute('''
                 INSERT OR IGNORE INTO admins (user_id, username, first_name, last_name, status, approved_at)
                 VALUES (1347692271, NULL, NULL, NULL, 'approved', CURRENT_TIMESTAMP)
@@ -121,7 +118,6 @@ class AdminManager:
                 WHERE user_id = ?
                 ''', (user_id,))
                 
-                # Отправляем уведомление одобренному админу
                 cursor.execute('SELECT first_name FROM admins WHERE user_id = ?', (user_id,))
                 result = cursor.fetchone()
                 first_name = result[0] if result else "Пользователь"
@@ -201,7 +197,6 @@ class AdminManager:
                 ''', (approved_by, action_id))
                 conn.commit()
                 
-                # Получаем данные действия
                 cursor.execute('''
                 SELECT action_type, action_data, admin_id FROM admin_actions WHERE id = ?
                 ''', (action_id,))
