@@ -73,7 +73,7 @@ schedule_bot/
 ### Переменные окружения:
 ```python
 BOT_TOKEN = 'TOKEN'
-DOWNLOAD_URL = 'URL'
+DOWNLOAD_URL = 'http://docs.vztec.ru/index.php/s/W5yaNali0j7SSDD/download'
 MAIN_ADMIN_ID = 123456789
 ```
 
