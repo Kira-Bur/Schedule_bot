@@ -22,7 +22,7 @@ ZIP_FILENAME = 'schedule.zip'
 EXTRACT_FOLDER = 'Расписание'
 TARGET_FOLDERS = ['корпус №1 (ФМПК)', 'корпус №2 (ПТФ)']
 UPDATE_INTERVAL = 60
-MAIN_ADMIN_ID = 1000000000
+MAIN_ADMIN_ID = 123456789
 
 db_manager = DatabaseManager()
 image_processor = ImageProcessor()
