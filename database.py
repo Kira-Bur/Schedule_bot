@@ -2,7 +2,6 @@ import sqlite3
 import hashlib
 import logging
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -54,7 +53,7 @@ class DatabaseManager:
         try:
             cursor.execute('SELECT building FROM users WHERE chat_id = ?', (chat_id,))
             result = cursor.fetchone()
-            return result[0] if result else 1  # По умолчанию корпус 1
+            return result[0] if result else 1
         except Exception as e:
             logger.error(f"Ошибка получения корпуса пользователя: {e}")
             return 1
